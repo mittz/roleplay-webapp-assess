@@ -1,8 +1,9 @@
 package architecture
 
 type AlloyDB struct {
-	id   string
-	cost float64
+	id               string
+	cost             float64
+	availabilityRate int
 }
 
 func GetAlloyDB(projectID string) (AlloyDB, bool) {
