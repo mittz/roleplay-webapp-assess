@@ -20,26 +20,26 @@ func NewArchitecture(projectID string, endpoint string) Architecture {
 	u, err := url.Parse(endpoint)
 	if err != nil {
 	}
-	hostIP := u.Host
+	host := u.Host
 
-	if lb, ok := GetLoadBalancingHTTPS(projectID, hostIP); ok {
+	if lb, ok := GetLoadBalancingHTTPS(projectID, host); ok {
 		arch.lb = lb
 		arch.apps = arch.lb.GetBackends()
 	} else {
-		log.Printf("Load Balancing (ProjectID: %s, HostIP: %s) resource is not found.", projectID, hostIP)
+		log.Printf("Load Balancing (ProjectID: %s, Host: %s) resource is not found.", projectID, host)
 
-		if computing, ok := GetComputeEngine(projectID, hostIP); ok {
+		if computing, ok := GetComputeEngine(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetAppEngine(projectID, hostIP); ok {
+		} else if computing, ok := GetAppEngine(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetCloudRun(projectID, hostIP); ok {
+		} else if computing, ok := GetCloudRun(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetCloudFunctions(projectID, hostIP); ok {
+		} else if computing, ok := GetCloudFunctions(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetKubernetesEngine(projectID, hostIP); ok {
+		} else if computing, ok := GetKubernetesEngine(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
 		} else {
-			log.Printf("Computing (ProjectID: %s, HostIP: %s) resource is not found.", projectID, hostIP)
+			log.Printf("Computing (ProjectID: %s, Host: %s) resource is not found.", projectID, host)
 		}
 	}
 
@@ -64,18 +64,22 @@ func (a Architecture) CalcAvailabilityRate() (int, error) {
 	var appRate, dbRate int
 	appRegions, appZones := make(map[string]interface{}), make(map[string]interface{})
 
+	includeServerless := false
 	for _, app := range a.apps {
-		if region := app.GetRegion(); region != "" {
-			appRegions[region] = struct{}{}
-		}
-
-		if zone := app.GetZone(); zone != "" {
-			appZones[zone] = struct{}{}
+		appRegions[app.GetRegion()] = struct{}{}
+		switch app.(type) {
+		case ComputeEngine:
+			appZones[app.GetZone()] = struct{}{}
+		default:
+			// For serverless services
+			includeServerless = true
 		}
 	}
 
 	if len(appRegions) > 1 {
 		appRate = 3
+	} else if includeServerless {
+		appRate = 2
 	} else if len(appZones) > 1 {
 		appRate = 2
 	} else if len(appZones) == 1 {
