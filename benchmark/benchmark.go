@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -30,10 +31,13 @@ const (
 var httpClient *http.Client
 
 func Run(userkey, endpoint string) (int, error) {
+	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*BENCHMARK_TIMEOUT_SECOND)
 	defer cancel()
 	scores := make(chan int)
 	for i := 0; i < NUM_OF_BENCHMARKER; i++ {
+		wg.Add(1)
 		// TODO: Error handling when one of the benchmark functions faced an issue
 		go benchmark(ctx, endpoint, scores)
 	}
@@ -43,6 +47,7 @@ func Run(userkey, endpoint string) (int, error) {
 		totalScore += <-scores
 	}
 
+	wg.Wait()
 	return int(totalScore), nil
 }
 
