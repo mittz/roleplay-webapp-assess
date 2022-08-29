@@ -11,11 +11,11 @@ import (
 	"net/url"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mittz/roleplay-webapp-assess/product"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -31,15 +31,15 @@ const (
 var httpClient *http.Client
 
 func Run(userkey, endpoint string) (int, error) {
-	var wg sync.WaitGroup
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*BENCHMARK_TIMEOUT_SECOND)
+	eg, ctx := errgroup.WithContext(context.TODO())
 	defer cancel()
+
 	scores := make(chan int)
 	for i := 0; i < NUM_OF_BENCHMARKER; i++ {
-		wg.Add(1)
-		// TODO: Error handling when one of the benchmark functions faced an issue
-		go benchmark(ctx, endpoint, scores)
+		eg.Go(func() error {
+			return benchmark(ctx, endpoint, scores)
+		})
 	}
 
 	totalScore := 0
@@ -47,16 +47,20 @@ func Run(userkey, endpoint string) (int, error) {
 		totalScore += <-scores
 	}
 
-	wg.Wait()
-	return int(totalScore), nil
+	if err := eg.Wait(); err != nil {
+		return totalScore, err
+	}
+
+	return totalScore, nil
 }
 
-func benchmark(ctx context.Context, endpoint string, score chan<- int) {
+func benchmark(ctx context.Context, endpoint string, score chan<- int) error {
 	total := 0
 	for {
 		select {
 		case <-ctx.Done():
 			score <- total
+			return nil
 		default: // do benchmark
 			rand.Seed(time.Now().UnixNano())
 			baseURL, err := url.Parse(endpoint)
@@ -70,28 +74,28 @@ func benchmark(ctx context.Context, endpoint string, score chan<- int) {
 			result := benchGetProducts(*baseURL)
 			if result == 0 {
 				score <- 0
-				return
+				return fmt.Errorf("unable to get an expected result from GET /products")
 			}
 			total += result
 
 			result = benchPostCheckout(*baseURL, productID, productQuantity)
 			if result == 0 {
 				score <- 0
-				return
+				return fmt.Errorf("unable to get an expected result from POST /checkout")
 			}
 			total += result
 
 			result = benchGetProduct(*baseURL)
 			if result == 0 {
 				score <- 0
-				return
+				return fmt.Errorf("unable to get an expected result from GET /product")
 			}
 			total += result
 
 			result = benchGetCheckouts(*baseURL, productID, productQuantity)
 			if result == 0 {
 				score <- 0
-				return
+				return fmt.Errorf("unable to get an expected result from GET /checkouts")
 			}
 			total += result
 		}
