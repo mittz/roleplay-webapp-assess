@@ -1,14 +1,49 @@
 package architecture
 
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"os/exec"
+)
+
 type AlloyDB struct {
 	id               string
 	cost             float64
 	availabilityRate int
 }
 
+type Cluster struct {
+	UID  string `json:"uid"`
+	Name string `json:"name"`
+}
+
 func GetAlloyDB(projectID string) (AlloyDB, bool) {
-	db := AlloyDB{}
-	return db, false
+	outCluster, err := exec.Command(
+		"gcloud",
+		"beta",
+		"alloydb",
+		"clusters",
+		"list",
+		fmt.Sprintf("--project=%s", projectID),
+		"--format=json",
+	).Output()
+	if err != nil {
+		log.Printf("GetAlloyDB: %v", err)
+		return AlloyDB{}, false
+	}
+
+	var clusters []Cluster
+	if err := json.Unmarshal(outCluster, &clusters); err != nil {
+		log.Println(err)
+		return AlloyDB{}, false
+	}
+
+	if len(clusters) == 0 {
+		return AlloyDB{}, false
+	}
+
+	return AlloyDB{id: clusters[0].UID, availabilityRate: 2}, true
 }
 
 func (r AlloyDB) GetID() string {
@@ -16,7 +51,7 @@ func (r AlloyDB) GetID() string {
 }
 
 func (r AlloyDB) GetAvailabilityRate() int {
-	return 0
+	return r.availabilityRate
 }
 
 func (r AlloyDB) GetCost() float64 {
