@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"time"
+
+	"github.com/jackc/pgx/v4"
 )
 
 type JobHistory struct {
@@ -20,7 +22,7 @@ type JobHistory struct {
 
 func (j JobHistory) WriteDatabase() error {
 	dp := GetDatabaseConnection()
-	query := `
+	queryInsertHistory := `
 		INSERT INTO job_histories(
 			userkey,
 			ldap,
@@ -43,7 +45,7 @@ func (j JobHistory) WriteDatabase() error {
 			$9
 		)
 	`
-	_, err := dp.Exec(context.Background(), query,
+	if _, err := dp.Exec(context.Background(), queryInsertHistory,
 		j.Userkey,
 		j.LDAP,
 		j.Total,
@@ -52,8 +54,50 @@ func (j JobHistory) WriteDatabase() error {
 		j.AvailabilityRate,
 		j.Message,
 		j.Cost,
-		time.Now(),
-	)
+		j.ExecutedAt,
+	); err != nil {
+		return err
+	}
 
-	return err
+	var ldap string
+	queryGetRanking := `
+		SELECT ldap FROM rankings WHERE ldap=$1
+	`
+	queryInsertRanking := `
+		INSERT INTO rankings(
+			ldap,
+			total,
+			cost_performance,
+			executed_at
+		) VALUES(
+			$1,
+			$2,
+			$3,
+			$4
+		)
+	`
+	queryUpdateRanking := `
+		UPDATE rankings SET total=$1, cost_performance=$2, executed_at=$3 WHERE ldap=$4
+	`
+
+	isRowPresent := true
+	if err := dp.QueryRow(context.Background(), queryGetRanking, j.LDAP).Scan(&ldap); err != nil {
+		if err != pgx.ErrNoRows {
+			return err
+		}
+
+		isRowPresent = false
+	}
+
+	if isRowPresent {
+		if _, err := dbPool.Exec(context.Background(), queryUpdateRanking, j.Total, j.CostPerformance, j.ExecutedAt, j.LDAP); err != nil {
+			return err
+		}
+	} else {
+		if _, err := dbPool.Exec(context.Background(), queryInsertRanking, j.LDAP, j.Total, j.CostPerformance, j.ExecutedAt); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

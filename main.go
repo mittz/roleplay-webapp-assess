@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/mittz/roleplay-webapp-assess/architecture"
 	"github.com/mittz/roleplay-webapp-assess/benchmark"
 	"github.com/mittz/roleplay-webapp-assess/database"
+	"github.com/mittz/roleplay-webapp-assess/user"
 	"github.com/mittz/roleplay-webapp-assess/utils"
 )
 
@@ -16,7 +18,7 @@ func main() {
 	projectID := utils.GetEnvProjectID()
 	arch := architecture.NewArchitecture(projectID, endpoint)
 
-	jobHistory := new(database.JobHistory)
+	jobHistory := &database.JobHistory{Userkey: userkey, LDAP: user.GetUser(userkey).LDAP, ExecutedAt: time.Now()}
 
 	availabilityRate, err := arch.CalcAvailabilityRate()
 	if err != nil {
