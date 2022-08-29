@@ -32,7 +32,7 @@ var httpClient *http.Client
 
 func Run(userkey, endpoint string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*BENCHMARK_TIMEOUT_SECOND)
-	eg, ctx := errgroup.WithContext(context.TODO())
+	eg, ctx := errgroup.WithContext(ctx)
 	defer cancel()
 
 	scores := make(chan int)

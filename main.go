@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/mittz/roleplay-webapp-assess/architecture"
@@ -19,7 +20,7 @@ func main() {
 
 	availabilityRate, err := arch.CalcAvailabilityRate()
 	if err != nil {
-		jobHistory.Message = err.Error()
+		jobHistory.Message = fmt.Sprintf("Failed to get availability rate: %v", err.Error())
 		if writeErr := jobHistory.WriteDatabase(); writeErr != nil {
 			log.Println(writeErr)
 		}
@@ -31,7 +32,7 @@ func main() {
 
 	performance, err := benchmark.Run(userkey, endpoint)
 	if err != nil {
-		jobHistory.Message = err.Error()
+		jobHistory.Message = fmt.Sprintf("Failed to get benchmark score: %v", err.Error())
 		if writeErr := jobHistory.WriteDatabase(); writeErr != nil {
 			log.Println(writeErr)
 		}
