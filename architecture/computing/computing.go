@@ -1,4 +1,4 @@
-package architecture
+package computing
 
 type Computing interface {
 	GetID() string

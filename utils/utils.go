@@ -3,6 +3,7 @@ package utils
 import (
 	"log"
 	"os"
+	"strings"
 )
 
 func getEnv(key string) string {
@@ -32,4 +33,9 @@ func GetMin(x, y int) int {
 	}
 
 	return y
+}
+
+// us-central1-c => us-central1
+func GetRegionFromZone(zone string) string {
+	return strings.Join(strings.Split(zone, "-")[0:2], "-")
 }

@@ -29,6 +29,7 @@ func main() {
 		return
 	}
 	jobHistory.AvailabilityRate = availabilityRate
+	log.Printf("Availability rate: %d", availabilityRate)
 
 	jobHistory.Cost = arch.CalcCost()
 
@@ -42,11 +43,13 @@ func main() {
 	}
 	jobHistory.Performance = performance
 
-	jobHistory.Total = jobHistory.Performance * jobHistory.AvailabilityRate
-	jobHistory.CostPerformance = float64(jobHistory.Total) / jobHistory.Cost
+	jobHistory.Score = jobHistory.Performance * jobHistory.AvailabilityRate
+	jobHistory.ScoreByCost = float64(jobHistory.Score) / jobHistory.Cost
 	jobHistory.Message = "Successfully your assessment was completed."
 
 	if writeErr := jobHistory.WriteDatabase(); writeErr != nil {
 		log.Println(writeErr)
 	}
+
+	log.Println("Successfully completed.")
 }

@@ -1,4 +1,4 @@
-package architecture
+package database
 
 type Database interface {
 	GetID() string

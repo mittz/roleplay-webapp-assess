@@ -1,0 +1,6 @@
+package cost
+
+const (
+	ALLOYDB_COST_PER_CPU_CORE = 1.0
+	ALLOYDB_COST_PER_MEM_MIB  = 0.0025
+)

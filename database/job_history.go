@@ -11,8 +11,8 @@ type JobHistory struct {
 	ID               int
 	Userkey          string
 	LDAP             string
-	Total            int
-	CostPerformance  float64
+	Score            int
+	ScoreByCost      float64
 	Performance      int
 	AvailabilityRate int
 	Message          string
@@ -26,8 +26,8 @@ func (j JobHistory) WriteDatabase() error {
 		INSERT INTO job_histories(
 			userkey,
 			ldap,
-			total,
-			cost_performance,
+			score,
+			score_by_cost,
 			performance,
 			availability_rate,
 			message,
@@ -48,8 +48,8 @@ func (j JobHistory) WriteDatabase() error {
 	if _, err := dp.Exec(context.Background(), queryInsertHistory,
 		j.Userkey,
 		j.LDAP,
-		j.Total,
-		j.CostPerformance,
+		j.Score,
+		j.ScoreByCost,
 		j.Performance,
 		j.AvailabilityRate,
 		j.Message,
@@ -66,8 +66,8 @@ func (j JobHistory) WriteDatabase() error {
 	queryInsertRanking := `
 		INSERT INTO rankings(
 			ldap,
-			total,
-			cost_performance,
+			score,
+			score_by_cost,
 			executed_at
 		) VALUES(
 			$1,
@@ -90,11 +90,11 @@ func (j JobHistory) WriteDatabase() error {
 	}
 
 	if isRowPresent {
-		if _, err := dbPool.Exec(context.Background(), queryUpdateRanking, j.Total, j.CostPerformance, j.ExecutedAt, j.LDAP); err != nil {
+		if _, err := dbPool.Exec(context.Background(), queryUpdateRanking, j.Score, j.ScoreByCost, j.ExecutedAt, j.LDAP); err != nil {
 			return err
 		}
 	} else {
-		if _, err := dbPool.Exec(context.Background(), queryInsertRanking, j.LDAP, j.Total, j.CostPerformance, j.ExecutedAt); err != nil {
+		if _, err := dbPool.Exec(context.Background(), queryInsertRanking, j.LDAP, j.Score, j.ScoreByCost, j.ExecutedAt); err != nil {
 			return err
 		}
 	}

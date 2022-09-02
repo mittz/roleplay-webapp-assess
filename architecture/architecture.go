@@ -5,13 +5,23 @@ import (
 	"log"
 	"net/url"
 
+	"github.com/mittz/roleplay-webapp-assess/architecture/computing"
+	"github.com/mittz/roleplay-webapp-assess/architecture/computing/appengine"
+	"github.com/mittz/roleplay-webapp-assess/architecture/computing/cloudfunctions"
+	"github.com/mittz/roleplay-webapp-assess/architecture/computing/cloudrun"
+	"github.com/mittz/roleplay-webapp-assess/architecture/computing/computeengine"
+	"github.com/mittz/roleplay-webapp-assess/architecture/database"
+	"github.com/mittz/roleplay-webapp-assess/architecture/database/alloydb"
+	"github.com/mittz/roleplay-webapp-assess/architecture/database/cloudspanner"
+	"github.com/mittz/roleplay-webapp-assess/architecture/database/cloudsql"
+	"github.com/mittz/roleplay-webapp-assess/architecture/loadbalancing"
 	"github.com/mittz/roleplay-webapp-assess/utils"
 )
 
 type Architecture struct {
-	lb   LoadBalancingHTTPS
-	apps []Computing
-	db   Database
+	lb   loadbalancing.LoadBalancingHTTPS
+	apps []computing.Computing
+	db   database.Database
 }
 
 func NewArchitecture(projectID string, endpoint string) Architecture {
@@ -19,36 +29,43 @@ func NewArchitecture(projectID string, endpoint string) Architecture {
 
 	u, err := url.Parse(endpoint)
 	if err != nil {
+		log.Println(err)
+		return Architecture{}
 	}
 	host := u.Host
 
-	if lb, ok := GetLoadBalancingHTTPS(projectID, host); ok {
+	if lb, ok := loadbalancing.GetLoadBalancingHTTPS(projectID, host); ok {
 		arch.lb = lb
+		log.Printf("Load Balancing resource was found: %s", lb.GetID())
+
 		arch.apps = arch.lb.GetBackends()
 	} else {
-		log.Printf("Load Balancing (ProjectID: %s, Host: %s) resource is not found.", projectID, host)
-
-		if computing, ok := GetComputeEngine(projectID, host); ok {
+		if computing, ok := computeengine.GetComputeEngine(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetAppEngine(projectID, host); ok {
+			log.Printf("Compute Engine resource was found: %s", computing.GetID())
+		} else if computing, ok := appengine.GetAppEngine(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetCloudRun(projectID, host); ok {
+			log.Printf("App Engine resource was found: %s", computing.GetID())
+		} else if computing, ok := cloudrun.GetCloudRun(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetCloudFunctions(projectID, host); ok {
+			log.Printf("Cloud Run resource was found: %s", computing.GetID())
+		} else if computing, ok := cloudfunctions.GetCloudFunctions(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
-		} else if computing, ok := GetKubernetesEngine(projectID, host); ok {
-			arch.apps = append(arch.apps, computing)
+			log.Printf("Cloud Functions resource was found: %s", computing.GetID())
 		} else {
-			log.Printf("Computing (ProjectID: %s, Host: %s) resource is not found.", projectID, host)
+			log.Printf("Computing resource (ProjectID: %s, Host: %s) was not found.", projectID, host)
 		}
 	}
 
-	if db, ok := GetCloudSQL(projectID); ok {
+	if db, ok := cloudsql.GetCloudSQL(projectID); ok {
 		arch.db = db
-	} else if db, ok := GetAlloyDB(projectID); ok {
+		log.Printf("Cloud SQL resource was found: %s", db.GetID())
+	} else if db, ok := alloydb.GetAlloyDB(projectID); ok {
 		arch.db = db
-	} else if db, ok := GetCloudSpanner(projectID); ok {
+		log.Printf("AlloyDB resource was found: %s", db.GetID())
+	} else if db, ok := cloudspanner.GetCloudSpanner(projectID); ok {
 		arch.db = db
+		log.Printf("Cloud Spanner resource was found: %s", db.GetID())
 	} else {
 		log.Printf("Database (ProjectID: %s) resource is not found.", projectID)
 	}
@@ -68,7 +85,7 @@ func (a Architecture) CalcAvailabilityRate() (int, error) {
 	for _, app := range a.apps {
 		appRegions[app.GetRegion()] = struct{}{}
 		switch app.(type) {
-		case ComputeEngine:
+		case computeengine.ComputeEngine:
 			appZones[app.GetZone()] = struct{}{}
 		default:
 			// For serverless services

@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	BENCHMARK_TIMEOUT_SECOND          = 60
+	BENCHMARK_TIMEOUT_SECOND          = 2
 	NUM_OF_BENCHMARKER                = 4
 	MAX_PRODUCT_QUANTITY_PER_CHECKOUT = 100
 	SCORE_GET_PRODUCTS                = 5
