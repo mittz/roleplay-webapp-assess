@@ -98,7 +98,7 @@ func GetCloudSQL(projectID string) (CloudSQL, bool) {
 	}
 
 	haRate := 1
-	if primaryInstance.FailoverReplica.Available {
+	if primaryInstance.FailoverReplica != nil && primaryInstance.FailoverReplica.Available {
 		haRate = 2
 	}
 
