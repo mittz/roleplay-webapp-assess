@@ -78,7 +78,7 @@ func getReplicaInstances(projectID string, primaryInstanceName string) ([]*sqlad
 
 	var replicaInstances []*sqladmin.DatabaseInstance
 	for _, instance := range instances.Items {
-		if instance.State == "RUNNABLE" && instance.InstanceType == "READ_REPLICA_INSTANCE" && instance.MasterInstanceName == primaryInstanceName {
+		if instance.State == "RUNNABLE" && instance.InstanceType == "READ_REPLICA_INSTANCE" && instance.MasterInstanceName == fmt.Sprintf("%s:%s", projectID, primaryInstanceName) {
 			replicaInstances = append(replicaInstances, instance)
 		}
 	}
