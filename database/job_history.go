@@ -77,7 +77,7 @@ func (j JobHistory) WriteDatabase() error {
 		)
 	`
 	queryUpdateRanking := `
-		UPDATE rankings SET total=$1, cost_performance=$2, executed_at=$3 WHERE ldap=$4
+		UPDATE rankings SET score=$1, score_by_cost=$2, executed_at=$3 WHERE ldap=$4
 	`
 
 	isRowPresent := true
