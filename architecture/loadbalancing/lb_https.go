@@ -24,21 +24,70 @@ type ForwardingRule struct {
 	TargetPool string
 }
 
+type TargetHTTPProxy struct {
+	Name   string
+	URLMap string
+}
+
+type URLMap struct {
+	Name           string
+	DefaultService string
+}
+
+type BackendService struct {
+	Name     string
+	Backends []*computepb.Backend
+}
+
+type Instance struct {
+	Name   string
+	Zone   string
+	Status string
+}
+
 func GetLoadBalancingHTTPS(projectID string, hostIP string) (LoadBalancingHTTPS, bool) {
-	forwardingRule, err := getForwardingRules(projectID, hostIP)
+	forwardingRule, err := getForwardingRule(projectID, hostIP)
 	if err != nil {
 		return LoadBalancingHTTPS{}, false
 	}
 
-	lb := LoadBalancingHTTPS{
-		id:       forwardingRule.Name,
-		backends: getRegionBackendServices(projectID, forwardingRule),
+	targetHTTPProxy, err := forwardingRule.GetTargetHttpProxy(projectID)
+	if err != nil {
+		return LoadBalancingHTTPS{}, false
 	}
 
-	return lb, true
+	urlMap, err := targetHTTPProxy.GetURLMap(projectID)
+	if err != nil {
+		return LoadBalancingHTTPS{}, false
+	}
+
+	backendService, err := urlMap.GetBackendService(projectID)
+	if err != nil {
+		return LoadBalancingHTTPS{}, false
+	}
+
+	instances, err := backendService.ListInstances(projectID)
+	if err != nil {
+		return LoadBalancingHTTPS{}, false
+	}
+
+	var backends []computing.Computing
+	for _, x := range instances {
+		b, err := x.GetComputeEngine(projectID)
+		if err != nil {
+			return LoadBalancingHTTPS{}, false
+		}
+
+		backends = append(backends, b)
+	}
+
+	return LoadBalancingHTTPS{
+		id:       forwardingRule.Name,
+		backends: backends,
+	}, true
 }
 
-func getForwardingRules(projectID string, hostIP string) (*ForwardingRule, error) {
+func getForwardingRule(projectID string, hostIP string) (*ForwardingRule, error) {
 	ctx := context.Background()
 	c, err := compute.NewForwardingRulesRESTClient(ctx)
 	if err != nil {
@@ -73,7 +122,122 @@ func getForwardingRules(projectID string, hostIP string) (*ForwardingRule, error
 	return nil, fmt.Errorf("None forwarding rule matched to the host ipaddress")
 }
 
-func getRegionBackendServices(projectID string, forwardingRule *ForwardingRule) []computing.Computing {
+func (f *ForwardingRule) GetTargetHttpProxy(projectID string) (*TargetHTTPProxy, error) {
+	ctx := context.Background()
+	c, err := compute.NewTargetHttpProxiesRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	req := &computepb.GetTargetHttpProxyRequest{
+		Project:         projectID,
+		TargetHttpProxy: f.TargetPool,
+	}
+	resp, err := c.Get(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TargetHTTPProxy{
+		Name:   resp.GetName(),
+		URLMap: path.Base(resp.GetUrlMap()),
+	}, nil
+}
+
+func (t *TargetHTTPProxy) GetURLMap(projectID string) (*URLMap, error) {
+	ctx := context.Background()
+	c, err := compute.NewUrlMapsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	req := &computepb.GetUrlMapRequest{
+		Project: projectID,
+		UrlMap:  t.URLMap,
+	}
+	resp, err := c.Get(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &URLMap{
+		Name:           resp.GetName(),
+		DefaultService: path.Base(resp.GetDefaultService()),
+	}, nil
+}
+
+func (u *URLMap) GetBackendService(projectID string) (*BackendService, error) {
+	ctx := context.Background()
+	c, err := compute.NewBackendServicesRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	req := &computepb.GetBackendServiceRequest{
+		Project:        projectID,
+		BackendService: u.DefaultService,
+	}
+	resp, err := c.Get(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &BackendService{
+		Name:     resp.GetName(),
+		Backends: resp.GetBackends(),
+	}, nil
+}
+
+func (b *BackendService) ListInstances(projectID string) ([]*Instance, error) {
+	ctx := context.Background()
+	c, err := compute.NewInstanceGroupsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	var instances []*Instance
+	for _, backend := range b.Backends {
+		name := path.Base(backend.GetGroup())
+		zone := strings.Split(backend.GetGroup(), "/")[8]
+		req := &computepb.ListInstancesInstanceGroupsRequest{
+			Project:       projectID,
+			InstanceGroup: name,
+			Zone:          zone,
+		}
+		it := c.ListInstances(ctx, req)
+		for {
+			resp, err := it.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			instances = append(instances, &Instance{
+				Name:   path.Base(resp.GetInstance()),
+				Zone:   strings.Split(resp.GetInstance(), "/")[8],
+				Status: resp.GetStatus(),
+			})
+		}
+	}
+
+	return instances, nil
+}
+
+func (x *Instance) GetComputeEngine(projectID string) (computeengine.ComputeEngine, error) {
+	c, err := computeengine.GetComputeInstance(projectID, x.Zone, x.Name)
+	if err != nil {
+		return computeengine.ComputeEngine{}, err
+	}
+
+	return c, nil
+}
+
+func getTargetPools(projectID string, forwardingRule *ForwardingRule) []computing.Computing {
 	ctx := context.Background()
 	c, err := compute.NewTargetPoolsRESTClient(ctx)
 	if err != nil {
