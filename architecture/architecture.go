@@ -110,6 +110,8 @@ func (a Architecture) CalcAvailabilityRate() (int, error) {
 	}
 	dbRate = a.db.GetAvailabilityRate()
 
+	log.Printf("app rate: %d, db rate: %d", appRate, dbRate)
+
 	return utils.GetMin(appRate, dbRate), nil
 }
 
