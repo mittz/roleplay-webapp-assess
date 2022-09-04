@@ -102,7 +102,6 @@ func (c Cluster) GetInstances() ([]Instance, error) {
 func GetAlloyDB(projectID string) (AlloyDB, bool) {
 	clusters, err := getClusters(projectID)
 	if err != nil {
-		log.Println(err)
 		return AlloyDB{}, false
 	}
 
