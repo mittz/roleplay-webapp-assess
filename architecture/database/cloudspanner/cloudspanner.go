@@ -53,6 +53,10 @@ func getInstances(projectID string) ([]Instance, error) {
 		})
 	}
 
+	if len(instances) == 0 {
+		return []Instance{}, fmt.Errorf("Cloud Spanner instance was not found.")
+	}
+
 	return instances, nil
 }
 

@@ -16,9 +16,16 @@ func main() {
 	userkey := utils.GetEnvUserkey()
 	endpoint := utils.GetEnvEndpoint()
 	projectID := utils.GetEnvProjectID()
-	arch := architecture.NewArchitecture(projectID, endpoint)
-
 	jobHistory := &database.JobHistory{Userkey: userkey, LDAP: user.GetUser(userkey).LDAP, ExecutedAt: time.Now()}
+
+	arch, err := architecture.NewArchitecture(projectID, endpoint)
+	if err != nil {
+		jobHistory.Message = fmt.Sprintf("Failed to get architecture information: %v", err.Error())
+		if writeErr := jobHistory.WriteDatabase(); writeErr != nil {
+			log.Println(writeErr)
+		}
+		return
+	}
 
 	availabilityRate, err := arch.CalcAvailabilityRate()
 	if err != nil {

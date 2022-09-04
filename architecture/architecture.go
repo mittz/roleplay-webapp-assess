@@ -24,13 +24,12 @@ type Architecture struct {
 	db   database.Database
 }
 
-func NewArchitecture(projectID string, endpoint string) Architecture {
+func NewArchitecture(projectID string, endpoint string) (Architecture, error) {
 	arch := Architecture{}
 
 	u, err := url.Parse(endpoint)
 	if err != nil {
-		log.Println(err)
-		return Architecture{}
+		return Architecture{}, err
 	}
 	host := u.Host
 
@@ -53,24 +52,38 @@ func NewArchitecture(projectID string, endpoint string) Architecture {
 			arch.apps = append(arch.apps, computing)
 			log.Printf("Cloud Functions resource was found: %s", computing.GetID())
 		} else {
-			log.Printf("Computing resource (ProjectID: %s, Host: %s) was not found.", projectID, host)
+			return Architecture{}, fmt.Errorf("Computing resource (ProjectID: %s, Host: %s) was not found.", projectID, host)
 		}
 	}
 
+	dbCount := 0
 	if db, ok := cloudsql.GetCloudSQL(projectID); ok {
 		arch.db = db
+		dbCount++
 		log.Printf("Cloud SQL resource was found: %s", db.GetID())
-	} else if db, ok := alloydb.GetAlloyDB(projectID); ok {
-		arch.db = db
-		log.Printf("AlloyDB resource was found: %s", db.GetID())
-	} else if db, ok := cloudspanner.GetCloudSpanner(projectID); ok {
-		arch.db = db
-		log.Printf("Cloud Spanner resource was found: %s", db.GetID())
-	} else {
-		log.Printf("Database (ProjectID: %s) resource is not found.", projectID)
 	}
 
-	return arch
+	if db, ok := alloydb.GetAlloyDB(projectID); ok {
+		arch.db = db
+		dbCount++
+		log.Printf("AlloyDB resource was found: %s", db.GetID())
+	}
+
+	if db, ok := cloudspanner.GetCloudSpanner(projectID); ok {
+		arch.db = db
+		dbCount++
+		log.Printf("Cloud Spanner resource was found: %s", db.GetID())
+	}
+
+	if dbCount == 0 {
+		return Architecture{}, fmt.Errorf("Database product was not found in %s", projectID)
+	}
+
+	if dbCount > 1 {
+		return Architecture{}, fmt.Errorf("Multiple database products were detected in %s", projectID)
+	}
+
+	return arch, nil
 }
 
 func (a Architecture) CalcAvailabilityRate() (int, error) {
