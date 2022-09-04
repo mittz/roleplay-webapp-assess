@@ -88,7 +88,7 @@ func (r CloudSpanner) GetID() string {
 }
 
 func (r CloudSpanner) GetAvailabilityRate() int {
-	return 0
+	return r.availabilityRate
 }
 
 func (r CloudSpanner) GetCost() float64 {
