@@ -21,6 +21,7 @@ func main() {
 	arch, err := architecture.NewArchitecture(projectID, endpoint)
 	if err != nil {
 		jobHistory.Message = fmt.Sprintf("Failed to get architecture information: %v", err.Error())
+		log.Fatalf("%+v", jobHistory)
 		if writeErr := jobHistory.WriteDatabase(); writeErr != nil {
 			log.Println(writeErr)
 		}
