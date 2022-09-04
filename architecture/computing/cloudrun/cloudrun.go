@@ -28,7 +28,8 @@ type Service struct {
 }
 
 type Revision struct {
-	containers []Container
+	containers       []Container
+	avgInstanceCount int
 }
 
 type Container struct {
@@ -105,6 +106,9 @@ func (s Service) GetRevisions() ([]Revision, error) {
 			return []Revision{}, err
 		}
 
+		minInstanceCount := resp.GetScaling().GetMaxInstanceCount()
+		maxInstanceCount := resp.GetScaling().GetMinInstanceCount()
+
 		var containers []Container
 		for _, condition := range resp.GetConditions() {
 			if condition.GetType() == "ResourcesAvailable" && condition.GetState() == runpb.Condition_CONDITION_SUCCEEDED {
@@ -116,7 +120,10 @@ func (s Service) GetRevisions() ([]Revision, error) {
 			}
 		}
 
-		revisions = append(revisions, Revision{containers: containers})
+		revisions = append(revisions, Revision{
+			containers:       containers,
+			avgInstanceCount: (int(minInstanceCount) + int(maxInstanceCount)) / 2,
+		})
 	}
 
 	return revisions, nil
@@ -150,7 +157,11 @@ func GetCloudRun(projectID string, hostName string) (CloudRun, bool) {
 				return CloudRun{}, false
 			}
 
-			totalCost += float64(cpuNum)/1000*cost.SERVERLESS_COST_PER_CPU_CORE + float64(memNum)*cost.SERVERLESS_COST_PER_MEM_MIB
+			if strings.Contains(memLimit, "Gi") {
+				totalCost += (float64(cpuNum)/1000*cost.SERVERLESS_COST_PER_CPU_CORE + float64(memNum)*1024*cost.SERVERLESS_COST_PER_MEM_MIB) * float64(revision.avgInstanceCount)
+			} else { // "Mi"
+				totalCost += (float64(cpuNum)/1000*cost.SERVERLESS_COST_PER_CPU_CORE + float64(memNum)*cost.SERVERLESS_COST_PER_MEM_MIB) * float64(revision.avgInstanceCount)
+			}
 		}
 	}
 
@@ -159,6 +170,35 @@ func GetCloudRun(projectID string, hostName string) (CloudRun, bool) {
 		region: service.location,
 		cost:   totalCost,
 	}, true
+}
+
+func GetCloudRunService(projectID string, region string, name string) (CloudRun, error) {
+	ctx := context.Background()
+	c, err := run.NewServicesClient(ctx)
+	if err != nil {
+		return CloudRun{}, err
+	}
+	defer c.Close()
+
+	req := &runpb.GetServiceRequest{
+		Name: fmt.Sprintf("projects/%s/locations/%s/services/%s", projectID, region, name),
+	}
+	resp, err := c.GetService(ctx, req)
+	if err != nil {
+		return CloudRun{}, nil
+	}
+
+	u, err := url.Parse(resp.GetUri())
+	if err != nil {
+		return CloudRun{}, err
+	}
+
+	x, exist := GetCloudRun(projectID, u.Host)
+	if exist {
+		return x, nil
+	}
+
+	return CloudRun{}, fmt.Errorf("Cloud Run Service: %s doesn't exist in %s - %s", name, projectID, region)
 }
 
 func (r CloudRun) GetID() string {
@@ -174,7 +214,7 @@ func (r CloudRun) GetCost() float64 {
 }
 
 func (r CloudRun) GetRegion() string {
-	return ""
+	return r.region
 }
 
 func (r CloudRun) GetZone() string {

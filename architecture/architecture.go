@@ -6,8 +6,6 @@ import (
 	"net/url"
 
 	"github.com/mittz/roleplay-webapp-assess/architecture/computing"
-	"github.com/mittz/roleplay-webapp-assess/architecture/computing/appengine"
-	"github.com/mittz/roleplay-webapp-assess/architecture/computing/cloudfunctions"
 	"github.com/mittz/roleplay-webapp-assess/architecture/computing/cloudrun"
 	"github.com/mittz/roleplay-webapp-assess/architecture/computing/computeengine"
 	"github.com/mittz/roleplay-webapp-assess/architecture/database"
@@ -42,15 +40,9 @@ func NewArchitecture(projectID string, endpoint string) (Architecture, error) {
 		if computing, ok := computeengine.GetComputeEngine(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
 			log.Printf("Compute Engine resource was found: %s", computing.GetID())
-		} else if computing, ok := appengine.GetAppEngine(projectID, host); ok {
-			arch.apps = append(arch.apps, computing)
-			log.Printf("App Engine resource was found: %s", computing.GetID())
 		} else if computing, ok := cloudrun.GetCloudRun(projectID, host); ok {
 			arch.apps = append(arch.apps, computing)
 			log.Printf("Cloud Run resource was found: %s", computing.GetID())
-		} else if computing, ok := cloudfunctions.GetCloudFunctions(projectID, host); ok {
-			arch.apps = append(arch.apps, computing)
-			log.Printf("Cloud Functions resource was found: %s", computing.GetID())
 		} else {
 			return Architecture{}, fmt.Errorf("Computing resource (ProjectID: %s, Host: %s) was not found.", projectID, host)
 		}

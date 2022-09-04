@@ -8,6 +8,7 @@ import (
 
 	compute "cloud.google.com/go/compute/apiv1"
 	computing "github.com/mittz/roleplay-webapp-assess/architecture/computing"
+	"github.com/mittz/roleplay-webapp-assess/architecture/computing/cloudrun"
 	"github.com/mittz/roleplay-webapp-assess/architecture/computing/computeengine"
 	"google.golang.org/api/iterator"
 	computepb "google.golang.org/genproto/googleapis/cloud/compute/v1"
@@ -45,6 +46,12 @@ type Instance struct {
 	Status string
 }
 
+type Serverless struct {
+	Name    string
+	Region  string
+	Service string
+}
+
 func GetLoadBalancingHTTPS(projectID string, hostIP string) (LoadBalancingHTTPS, bool) {
 	forwardingRule, err := getForwardingRule(projectID, hostIP)
 	if err != nil {
@@ -71,9 +78,23 @@ func GetLoadBalancingHTTPS(projectID string, hostIP string) (LoadBalancingHTTPS,
 		return LoadBalancingHTTPS{}, false
 	}
 
+	serverlesses, err := backendService.ListServerlesses(projectID)
+	if err != nil {
+		return LoadBalancingHTTPS{}, false
+	}
+
 	var backends []computing.Computing
 	for _, x := range instances {
 		b, err := x.GetComputeEngine(projectID)
+		if err != nil {
+			return LoadBalancingHTTPS{}, false
+		}
+
+		backends = append(backends, b)
+	}
+
+	for _, serverless := range serverlesses {
+		b, err := serverless.Get(projectID)
 		if err != nil {
 			return LoadBalancingHTTPS{}, false
 		}
@@ -203,6 +224,12 @@ func (b *BackendService) ListInstances(projectID string) ([]*Instance, error) {
 	for _, backend := range b.Backends {
 		name := path.Base(backend.GetGroup())
 		zone := strings.Split(backend.GetGroup(), "/")[8]
+		groupType := strings.Split(backend.GetGroup(), "/")[9]
+
+		if groupType != "instanceGroups" {
+			continue
+		}
+
 		req := &computepb.ListInstancesInstanceGroupsRequest{
 			Project:       projectID,
 			InstanceGroup: name,
@@ -228,6 +255,46 @@ func (b *BackendService) ListInstances(projectID string) ([]*Instance, error) {
 	return instances, nil
 }
 
+func (b *BackendService) ListServerlesses(projectID string) ([]*Serverless, error) {
+	ctx := context.Background()
+	c, err := compute.NewRegionNetworkEndpointGroupsRESTClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Close()
+
+	var serverlesses []*Serverless
+	for _, backend := range b.Backends {
+		name := path.Base(backend.GetGroup())
+		region := strings.Split(backend.GetGroup(), "/")[8]
+		groupType := strings.Split(backend.GetGroup(), "/")[9]
+
+		if groupType != "networkEndpointGroups" {
+			continue
+		}
+
+		req := &computepb.GetRegionNetworkEndpointGroupRequest{
+			Project:              projectID,
+			NetworkEndpointGroup: name,
+			Region:               region,
+		}
+		resp, err := c.Get(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		if serverless := resp.GetCloudRun(); serverless != nil {
+			serverlesses = append(serverlesses, &Serverless{
+				Name:    serverless.GetService(),
+				Region:  region,
+				Service: "Cloud Run",
+			})
+		}
+	}
+
+	return serverlesses, nil
+}
+
 func (x *Instance) GetComputeEngine(projectID string) (computeengine.ComputeEngine, error) {
 	c, err := computeengine.GetComputeInstance(projectID, x.Zone, x.Name)
 	if err != nil {
@@ -237,48 +304,13 @@ func (x *Instance) GetComputeEngine(projectID string) (computeengine.ComputeEngi
 	return c, nil
 }
 
-func getTargetPools(projectID string, forwardingRule *ForwardingRule) []computing.Computing {
-	ctx := context.Background()
-	c, err := compute.NewTargetPoolsRESTClient(ctx)
-	if err != nil {
-		return []computing.Computing{}
+func (x *Serverless) Get(projectID string) (computing.Computing, error) {
+	switch x.Service {
+	case "Cloud Run":
+		return cloudrun.GetCloudRunService(projectID, x.Region, x.Name)
+	default:
+		return nil, fmt.Errorf("%s is not supported service", x.Service)
 	}
-	defer c.Close()
-
-	req := &computepb.AggregatedListTargetPoolsRequest{
-		Project: projectID,
-	}
-
-	var backends []computing.Computing
-	it := c.AggregatedList(ctx, req)
-	for {
-		resp, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return []computing.Computing{}
-		}
-
-		for _, pool := range resp.Value.TargetPools {
-			if pool.GetName() == forwardingRule.TargetPool {
-				for _, instance := range pool.GetInstances() {
-					name := path.Base(instance)
-					paths := strings.Split(instance, "/")
-					// https://www.googleapis.com/compute/v1/projects/<Project Name>/zones/<Zone>/instances/<Instance Name>
-					zone := paths[8]
-					i, err := computeengine.GetComputeInstance(projectID, zone, name)
-					if err != nil {
-						return []computing.Computing{}
-					}
-
-					backends = append(backends, i)
-				}
-			}
-		}
-	}
-
-	return backends
 }
 
 func (r LoadBalancingHTTPS) GetID() string {
