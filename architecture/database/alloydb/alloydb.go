@@ -108,6 +108,9 @@ func GetAlloyDB(projectID string) (AlloyDB, bool) {
 	cluster := clusters[0] // Pick up one cluster if there are multiple ones
 
 	instances, err := cluster.GetInstances()
+	if err != nil {
+		return AlloyDB{}, false
+	}
 
 	var totalCost float64
 	for _, instance := range instances {
