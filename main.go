@@ -27,16 +27,17 @@ func main() {
 		return
 	}
 
-	availabilityRate, err := arch.CalcAvailabilityRate()
-	if err != nil {
+	availabilityRates, err := arch.CalcAvailabilityRate()
+	if availabilityRates == nil || len(availabilityRates) < 2 || err != nil {
+		jobHistory.AvailabilityRate = 0
 		jobHistory.Message = fmt.Sprintf("Failed to get availability rate: %v", err.Error())
 		if writeErr := jobHistory.WriteDatabase(); writeErr != nil {
 			log.Println(writeErr)
 		}
 		return
 	}
-	jobHistory.AvailabilityRate = availabilityRate
-	log.Printf("Availability rate: %d", availabilityRate)
+	appRate, dbRate := availabilityRates[0], availabilityRates[1]
+	jobHistory.AvailabilityRate = utils.GetMin(appRate, dbRate)
 
 	jobHistory.Cost = arch.CalcCost()
 
@@ -52,11 +53,11 @@ func main() {
 
 	jobHistory.Score = jobHistory.Performance * jobHistory.AvailabilityRate
 	jobHistory.ScoreByCost = float64(jobHistory.Score) / jobHistory.Cost
-	jobHistory.Message = "Successfully your assessment was completed."
+	jobHistory.Message = fmt.Sprintf("Successfully your assessment was completed. App rate: %d DB rate: %d", appRate, dbRate)
 
 	if writeErr := jobHistory.WriteDatabase(); writeErr != nil {
 		log.Println(writeErr)
 	}
 
-	log.Println("Successfully completed.")
+	log.Printf("Successfully your assessment was completed. App rate: %d DB rate: %d", appRate, dbRate)
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/mittz/roleplay-webapp-assess/architecture/database/cloudspanner"
 	"github.com/mittz/roleplay-webapp-assess/architecture/database/cloudsql"
 	"github.com/mittz/roleplay-webapp-assess/architecture/loadbalancing"
-	"github.com/mittz/roleplay-webapp-assess/utils"
 )
 
 type Architecture struct {
@@ -78,9 +77,9 @@ func NewArchitecture(projectID string, endpoint string) (Architecture, error) {
 	return arch, nil
 }
 
-func (a Architecture) CalcAvailabilityRate() (int, error) {
+func (a Architecture) CalcAvailabilityRate() ([]int, error) {
 	if len(a.apps) == 0 {
-		return 0, fmt.Errorf("Computing product was not found")
+		return nil, fmt.Errorf("Computing product was not found")
 	}
 
 	var appRate, dbRate int
@@ -111,13 +110,11 @@ func (a Architecture) CalcAvailabilityRate() (int, error) {
 	}
 
 	if a.db == nil {
-		return 0, fmt.Errorf("Database product was not found")
+		return nil, fmt.Errorf("Database product was not found")
 	}
 	dbRate = a.db.GetAvailabilityRate()
 
-	log.Printf("app rate: %d, db rate: %d", appRate, dbRate)
-
-	return utils.GetMin(appRate, dbRate), nil
+	return []int{appRate, dbRate}, nil
 }
 
 func (a Architecture) CalcCost() float64 {
