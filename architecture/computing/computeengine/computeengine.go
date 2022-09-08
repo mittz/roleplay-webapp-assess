@@ -127,11 +127,16 @@ func GetComputeInstance(projectID string, zone string, name string) (ComputeEngi
 		return ComputeEngine{}, err
 	}
 
+	resource, err := getMachineType(projectID, zone, path.Base(resp.GetMachineType()))
+	if err != nil {
+		return ComputeEngine{}, err
+	}
+
 	return ComputeEngine{
 		id:     resp.GetName(),
 		region: utils.GetRegionFromZone(path.Base(resp.GetZone())),
 		zone:   path.Base(resp.GetZone()),
-		cost:   0,
+		cost:   calcCost(resource),
 	}, nil
 }
 
