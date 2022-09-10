@@ -42,7 +42,6 @@ func getClusters(projectID string) ([]Cluster, error) {
 		"--format=json",
 	).Output()
 	if err != nil {
-		log.Println(err)
 		return []Cluster{}, err
 	}
 
@@ -102,6 +101,7 @@ func (c Cluster) GetInstances() ([]Instance, error) {
 func GetAlloyDB(projectID string) (AlloyDB, bool) {
 	clusters, err := getClusters(projectID)
 	if err != nil {
+		log.Printf("Failed to get AlloyDB clusters: %v", err)
 		return AlloyDB{}, false
 	}
 
@@ -109,6 +109,7 @@ func GetAlloyDB(projectID string) (AlloyDB, bool) {
 
 	instances, err := cluster.GetInstances()
 	if err != nil {
+		log.Printf("Failed to get instances of AlloyDB cluster: %v", err)
 		return AlloyDB{}, false
 	}
 

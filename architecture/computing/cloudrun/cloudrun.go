@@ -3,6 +3,7 @@ package cloudrun
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"path"
 	"strconv"
@@ -143,25 +144,41 @@ func GetCloudRun(projectID string, hostName string) (CloudRun, bool) {
 	var totalCost float64
 	for _, revision := range revisions {
 		for _, container := range revision.containers {
-			cpuLimit := container.limits["cpu"]
-			cpuLimitNum := cpuLimit[:len(cpuLimit)-1] // Drop "m" from the last
-			cpuNum, err := strconv.Atoi(cpuLimitNum)
-			if err != nil {
+			cpuLimit, memLimit := container.limits["cpu"], container.limits["memory"]
+
+			var cpuNum, memNum int
+			if strings.Contains(cpuLimit, "m") {
+				cpuNum, err = strconv.Atoi(strings.TrimRight(cpuLimit, "m"))
+				if err != nil {
+					log.Printf("Error: %v", err)
+					return CloudRun{}, false
+				}
+				cpuNum /= 1000 // 1000, 2000, 3000 -> 1, 2, 3
+			} else {
+				cpuNum, err = strconv.Atoi(cpuLimit)
+				if err != nil {
+					log.Printf("Error: %v", err)
+					return CloudRun{}, false
+				}
+			}
+
+			if strings.Contains(memLimit, "Mi") {
+				memNum, err = strconv.Atoi(strings.TrimRight(memLimit, "Mi"))
+				if err != nil {
+					return CloudRun{}, false
+				}
+			} else if strings.Contains(memLimit, "Gi") {
+				memNum, err = strconv.Atoi(strings.TrimRight(memLimit, "Gi"))
+				if err != nil {
+					return CloudRun{}, false
+				}
+				memNum *= 1024 // Gi to Mi
+			} else {
+				log.Printf("Unexpected case was found in memory limit: %s", memLimit)
 				return CloudRun{}, false
 			}
 
-			memLimit := container.limits["memory"]
-			memLimitNum := memLimit[:len(memLimit)-2] // Drop Mi and Gi from the last
-			memNum, err := strconv.Atoi(memLimitNum)
-			if err != nil {
-				return CloudRun{}, false
-			}
-
-			if strings.Contains(memLimit, "Gi") {
-				totalCost += (float64(cpuNum)/1000*cost.SERVERLESS_COST_PER_CPU_CORE + float64(memNum)*1024*cost.SERVERLESS_COST_PER_MEM_MIB) * float64(revision.avgInstanceCount)
-			} else { // "Mi"
-				totalCost += (float64(cpuNum)/1000*cost.SERVERLESS_COST_PER_CPU_CORE + float64(memNum)*cost.SERVERLESS_COST_PER_MEM_MIB) * float64(revision.avgInstanceCount)
-			}
+			totalCost += (float64(cpuNum)*cost.SERVERLESS_COST_PER_CPU_CORE + float64(memNum)*cost.SERVERLESS_COST_PER_MEM_MIB) * float64(revision.avgInstanceCount)
 		}
 	}
 
