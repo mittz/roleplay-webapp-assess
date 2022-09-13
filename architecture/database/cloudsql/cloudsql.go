@@ -18,6 +18,13 @@ type CloudSQL struct {
 	availabilityRate int
 }
 
+var (
+	invalidMachineTypes = map[string]bool{
+		"db-f1-micro": true,
+		"db-g1-small": true,
+	}
+)
+
 func getPrimaryInstance(projectID string) (*sqladmin.DatabaseInstance, error) {
 	ctx := context.Background()
 
@@ -103,7 +110,7 @@ func GetCloudSQL(projectID string) (CloudSQL, bool) {
 		haRate = 2
 	}
 
-	if primaryInstance.Settings.Tier == "db-f1-micro" || primaryInstance.Settings.Tier == "db-g1-small" {
+	if invalidMachineTypes[primaryInstance.Settings.Tier] {
 		log.Printf("The machine type of Cloud SQL: %s is not supported in this competition.", primaryInstance.Settings.Tier)
 		return CloudSQL{}, false
 	}
