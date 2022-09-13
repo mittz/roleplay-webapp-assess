@@ -3,6 +3,7 @@ package cloudsql
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 
@@ -100,6 +101,11 @@ func GetCloudSQL(projectID string) (CloudSQL, bool) {
 	haRate := 1
 	if primaryInstance.FailoverReplica != nil && primaryInstance.FailoverReplica.Available {
 		haRate = 2
+	}
+
+	if primaryInstance.Settings.Tier == "db-f1-micro" || primaryInstance.Settings.Tier == "db-g1-small" {
+		log.Printf("The machine type of Cloud SQL: %s is not supported in this competition.", primaryInstance.Settings.Tier)
+		return CloudSQL{}, false
 	}
 
 	primaryInstaceTier := strings.Split(primaryInstance.Settings.Tier, "-")
